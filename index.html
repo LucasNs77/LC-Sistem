@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sistema de Vendas de Roupas • Estoque + Relatórios (PDF)</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkfNwpZsnDqgG3x1j4eewHk+K5GxXWf8b1Zr3sxu1Jw8z+0d3z0Z7c5mA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <!-- jsPDF + AutoTable -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+  <!-- Favicon (emoji) -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27><text y=%27.9em%27 font-size=%2790%27>👕</text></svg>">
+  <style>
+    /* Scrollbars suaves */
+    * { scrollbar-width: thin; scrollbar-color: #CBD5E1 transparent; }
+    ::-webkit-scrollbar { height: 8px; width: 8px; }
+    ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 8px; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+  <!-- App Shell -->
+  <header class="sticky top-0 z-20 bg-white/80 backdrop-blur border-b border-slate-200">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center gap-3">
+      <div class="w-9 h-9 rounded-2xl bg-indigo-600 text-white grid place-items-center text-xl">👕</div>
+      <div>
+        <h1 class="text-xl font-semibold leading-tight">LC System</h1>
+        <p class="text-xs text-slate-500">Estoque • Vendas • Relatórios em PDF • Dashboard</p>
+      </div>
+      <div class="ml-auto flex items-center gap-2">
+        <button id="btnBackup" class="px-3 py-2 rounded-xl text-sm border border-slate-300 hover:bg-slate-100"><i class="fa-solid fa-file-arrow-down mr-2"></i>Backup (JSON)</button>
+        <label class="px-3 py-2 rounded-xl text-sm border border-slate-300 hover:bg-slate-100 cursor-pointer">
+          <i class="fa-solid fa-file-arrow-up mr-2"></i>Restaurar
+          <input id="restoreInput" type="file" accept="application/json" class="hidden" />
+        </label>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto p-4">
+    <!-- Nav Tabs -->
+    <nav class="flex gap-2 mb-4">
+      <button data-tab="dashboard" class="tab-btn active px-4 py-2 rounded-2xl bg-indigo-600 text-white text-sm font-medium shadow">Dashboard</button>
+      <button data-tab="produtos" class="tab-btn px-4 py-2 rounded-2xl bg-white border border-slate-300 text-sm">Produtos</button>
+      <button data-tab="vendas" class="tab-btn px-4 py-2 rounded-2xl bg-white border border-slate-300 text-sm">Vendas</button>
+      <button data-tab="relatorios" class="tab-btn px-4 py-2 rounded-2xl bg-white border border-slate-300 text-sm">Relatórios</button>
+    </nav>
+
+    <!-- DASHBOARD -->
+    <section id="tab-dashboard" class="tab-section grid gap-4">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="rounded-2xl p-4 bg-white border border-slate-200 shadow-sm">
+          <p class="text-slate-500 text-sm">Faturamento (Mês)</p>
+          <p id="kpiFatMes" class="mt-1 text-2xl font-semibold">R$ 0,00</p>
+        </div>
+        <div class="rounded-2xl p-4 bg-white border border-slate-200 shadow-sm">
+          <p class="text-slate-500 text-sm">Itens Vendidos (Mês)</p>
+          <p id="kpiItensMes" class="mt-1 text-2xl font-semibold">0</p>
+        </div>
+        <div class="rounded-2xl p-4 bg-white border border-slate-200 shadow-sm">
+          <p class="text-slate-500 text-sm">Produtos em Baixo Estoque</p>
+          <p id="kpiLowStock" class="mt-1 text-2xl font-semibold">0</p>
+        </div>
+        <div class="rounded-2xl p-4 bg-white border border-slate-200 shadow-sm">
+          <p class="text-slate-500 text-sm">Ticket Médio (Mês)</p>
+          <p id="kpiTicket" class="mt-1 text-2xl font-semibold">R$ 0,00</p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div class="rounded-2xl p-4 bg-white border border-slate-200 shadow-sm lg:col-span-2">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="font-semibold">Faturamento por Dia (últimos 30)</h3>
+            <div class="text-xs text-slate-500" id="dashRange"></div>
+          </div>
+          <canvas id="chartFaturamento" height="120"></canvas>
+        </div>
+        <div class="rounded-2xl p-4 bg-white border border-slate-200 shadow-sm">
+          <h3 class="font-semibold mb-2">Vendas por Categoria</h3>
+          <canvas id="chartCategorias" height="120"></canvas>
+        </div>
+      </div>
+
+      <div class="rounded-2xl p-4 bg-white border border-slate-200 shadow-sm">
+        <h3 class="font-semibold mb-2">Alerta de Baixo Estoque</h3>
+        <div id="lowStockList" class="grid gap-2"></div>
+      </div>
+    </section>
+
+    <!-- PRODUTOS -->
+    <section id="tab-produtos" class="tab-section hidden grid gap-4">
+      <div class="rounded-2xl p-4 bg-white border border-slate-200 shadow-sm">
+        <h3 class="font-semibold mb-3">Cadastrar / Editar Produto</h3>
+        <form id="formProduto" class="grid md:grid-cols-5 gap-3 items-end">
+          <input type="hidden" id="produtoId">
+          <div>
+            <label class="text-sm text-slate-600">Nome</label>
+            <input id="produtoNome" class="w-full px-3 py-2 rounded-xl border border-slate-300" placeholder="Camiseta Básica" required>
+          </div>
+          <div>
+            <label class="text-sm text-slate-600">Categoria</label>
+            <input id="produtoCategoria" class="w-full px-3 py-2 rounded-xl border border-slate-300" placeholder="Camisetas" required>
+          </div>
+          <div>
+            <label class="text-sm text-slate-600">Preço (R$)</label>
+            <input id="produtoPreco" type="number" step="0.01" min="0" class="w-full px-3 py-2 rounded-xl border border-slate-300" placeholder="59.90" required>
+          </div>
+          <div>
+            <label class="text-sm text-slate-600">Estoque</label>
+            <input id="produtoEstoque" type="number" min="0" class="w-full px-3 py-2 rounded-xl border border-slate-300" placeholder="50" required>
+          </div>
+          <button class="px-4 py-2 rounded-xl bg-indigo-600 text-white font-medium"><i class="fa-solid fa-floppy-disk mr-2"></i>Salvar</button>
+        </form>
+      </div>
+
+      <div class="rounded-2xl p-4 bg-white border border-slate-200 shadow-sm">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-semibold">Produtos</h3>
+          <div class="flex gap-2">
+            <input id="buscaProduto" class="px-3 py-2 rounded-xl border border-slate-300 text-sm" placeholder="Buscar por nome/categoria" />
+            <button id="btnExportCSV" class="px-3 py-2 rounded-xl border border-slate-300 text-sm"><i class="fa-solid fa-file-csv mr-2"></i>Exportar CSV</button>
+          </div>
+        </div>
+        <div class="overflow-auto">
+          <table class="min-w-full text-sm">
+            <thead>
+              <tr class="text-left text-slate-500 border-b">
+                <th class="py-2 pr-2">#</th>
+                <th class="py-2 pr-2">Nome</th>
+                <th class="py-2 pr-2">Categoria</th>
+                <th class="py-2 pr-2">Preço</th>
+                <th class="py-2 pr-2">Estoque</th>
+                <th class="py-2 pr-2">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="listaProdutos"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- VENDAS -->
+    <section id="tab-vendas" class="tab-section hidden grid gap-4">
+      <div class="rounded-2xl p-4 bg-white border border-slate-200 shadow-sm">
+        <h3 class="font-semibold mb-3">Registrar Venda</h3>
+        <form id="formVenda" class="grid md:grid-cols-6 gap-3 items-end">
+          <div class="md:col-span-2">
+            <label class="text-sm text-slate-600">Produto</label>
+            <select id="vendaProduto" class="w-full px-3 py-2 rounded-xl border border-slate-300" required></select>
+          </div>
+          <div>
+            <label class="text-sm text-slate-600">Preço Unit. (R$)</label>
+            <input id="vendaPreco" type="number" step="0.01" min="0" class="w-full px-3 py-2 rounded-xl border border-slate-300" required>
+          </div>
+          <div>
+            <label class="text-sm text-slate-600">Quantidade</label>
+            <input id="vendaQtd" type="number" min="1" value="1" class="w-full px-3 py-2 rounded-xl border border-slate-300" required>
+          </div>
+          <div>
+            <label class="text-sm text-slate-600">Data</label>
+            <input id="vendaData" type="date" class="w-full px-3 py-2 rounded-xl border border-slate-300" required>
+          </div>
+          <button class="px-4 py-2 rounded-xl bg-emerald-600 text-white font-medium"><i class="fa-solid fa-cart-shopping mr-2"></i>Adicionar</button>
+        </form>
+      </div>
+
+      <div class="rounded-2xl p-4 bg-white border border-slate-200 shadow-sm">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-semibold">Histórico de Vendas</h3>
+          <div class="text-sm text-slate-500">Total: <span id="totalVendas">R$ 0,00</span></div>
+        </div>
+        <div class="overflow-auto">
+          <table class="min-w-full text-sm">
+            <thead>
+              <tr class="text-left text-slate-500 border-b">
+                <th class="py-2 pr-2">Data</th>
+                <th class="py-2 pr-2">Produto</th>
+                <th class="py-2 pr-2">Categoria</th>
+                <th class="py-2 pr-2">Qtd</th>
+                <th class="py-2 pr-2">Preço</th>
+                <th class="py-2 pr-2">Total</th>
+                <th class="py-2 pr-2">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="listaVendas"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- RELATÓRIOS -->
+    <section id="tab-relatorios" class="tab-section hidden grid gap-4">
+      <div class="rounded-2xl p-4 bg-white border border-slate-200 shadow-sm">
+        <h3 class="font-semibold mb-3">Gerar Relatório</h3>
+        <form id="formRelatorio" class="grid md:grid-cols-6 gap-3 items-end">
+          <div>
+            <label class="text-sm text-slate-600">De</label>
+            <input id="relDe" type="date" class="w-full px-3 py-2 rounded-xl border border-slate-300" required>
+          </div>
+          <div>
+            <label class="text-sm text-slate-600">Até</label>
+            <input id="relAte" type="date" class="w-full px-3 py-2 rounded-xl border border-slate-300" required>
+          </div>
+          <div>
+            <label class="text-sm text-slate-600">Categoria</label>
+            <input id="relCategoria" class="w-full px-3 py-2 rounded-xl border border-slate-300" placeholder="(todas)">
+          </div>
+          <div>
+            <label class="text-sm text-slate-600">Min. Qtd</label>
+            <input id="relMinQtd" type="number" min="0" class="w-full px-3 py-2 rounded-xl border border-slate-300" placeholder="0">
+          </div>
+          <button id="btnFiltrarRel" class="px-4 py-2 rounded-xl bg-slate-800 text-white font-medium"><i class="fa-solid fa-filter mr-2"></i>Aplicar</button>
+          <button id="btnPDF" type="button" class="px-4 py-2 rounded-xl border border-slate-300 font-medium"><i class="fa-solid fa-file-pdf mr-2 text-red-600"></i>Exportar PDF</button>
+        </form>
+      </div>
+
+      <div class="rounded-2xl p-4 bg-white border border-slate-200 shadow-sm">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-semibold">Resultado</h3>
+          <div class="text-sm text-slate-500">Total: <span id="totalRelatorio">R$ 0,00</span></div>
+        </div>
+        <div class="overflow-auto">
+          <table class="min-w-full text-sm">
+            <thead>
+              <tr class="text-left text-slate-500 border-b">
+                <th class="py-2 pr-2">Data</th>
+                <th class="py-2 pr-2">Produto</th>
+                <th class="py-2 pr-2">Categoria</th>
+                <th class="py-2 pr-2">Qtd</th>
+                <th class="py-2 pr-2">Preço</th>
+                <th class="py-2 pr-2">Total</th>
+              </tr>
+            </thead>
+            <tbody id="listaRelatorio"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="max-w-7xl mx-auto px-4 py-6 text-xs text-slate-500">
+    
+  </footer>
+
+  <script>
+    // ====== Utils ======
+    const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+    const fmtDate = (d) => new Date(d + 'T00:00:00');
+    const today = () => new Date().toISOString().slice(0,10);
+
+    // ====== Storage ======
+    const DB = {
+      load() {
+        const produtos = JSON.parse(localStorage.getItem('svr_produtos') || '[]');
+        const vendas = JSON.parse(localStorage.getItem('svr_vendas') || '[]');
+        return { produtos, vendas };
+      },
+      saveProdutos(list) { localStorage.setItem('svr_produtos', JSON.stringify(list)); },
+      saveVendas(list) { localStorage.setItem('svr_vendas', JSON.stringify(list)); },
+      backup() {
+        const json = JSON.stringify(this.load(), null, 2);
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = `backup-svr-${new Date().toISOString().slice(0,10)}.json`;
+        a.click(); URL.revokeObjectURL(url);
+      },
+      async restore(file) {
+        const txt = await file.text();
+        const data = JSON.parse(txt);
+        if (data.produtos && data.vendas) {
+          localStorage.setItem('svr_produtos', JSON.stringify(data.produtos));
+          localStorage.setItem('svr_vendas', JSON.stringify(data.vendas));
+          init();
+          alert('Backup restaurado com sucesso!');
+        } else {
+          alert('Arquivo inválido.');
+        }
+      }
+    };
+
+    // ====== Estado ======
+    let state = { produtos: [], vendas: [] };
+
+    function init() {
+      state = DB.load();
+      if (state.produtos.length === 0 && state.vendas.length === 0) seed();
+      renderProdutos();
+      fillProdutosSelect();
+      renderVendas();
+      refreshDashboard();
+      // Relatórios
+      relDe.value = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0,10);
+      relAte.value = today();
+      aplicarRelatorio();
+    }
+
+    function seed() {
+      // Dados exemplo iniciais
+      state.produtos = [
+        { id: crypto.randomUUID(), nome: 'Camiseta Básica', categoria: 'Camisetas', preco: 59.9, estoque: 40 },
+        { id: crypto.randomUUID(), nome: 'Calça Jeans Slim', categoria: 'Calças', preco: 139.9, estoque: 25 },
+        { id: crypto.randomUUID(), nome: 'Moletom Confort', categoria: 'Moletons', preco: 199.9, estoque: 15 },
+        { id: crypto.randomUUID(), nome: 'Bermuda Sarja', categoria: 'Bermudas', preco: 89.9, estoque: 30 },
+      ];
+      const hoje = new Date();
+      function randFrom(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+      const vendas = [];
+      for (let i=0;i<18;i++){
+        const p = randFrom(state.produtos);
+        const qtd = Math.ceil(Math.random()*3);
+        const data = new Date(hoje - (Math.random()*1000*60*60*24*25));
+        const y = data.toISOString().slice(0,10);
+        vendas.push({ id: crypto.randomUUID(), produtoId: p.id, produto: p.nome, categoria: p.categoria, preco: p.preco, qtd, data: y, total: Number((p.preco*qtd).toFixed(2)) });
+      }
+      // Ajusta estoque
+      vendas.forEach(v => {
+        const prod = state.produtos.find(x => x.id === v.produtoId);
+        if (prod) prod.estoque = Math.max(0, prod.estoque - v.qtd);
+      });
+      state.vendas = vendas;
+      DB.saveProdutos(state.produtos);
+      DB.saveVendas(state.vendas);
+    }
+
+    // ====== Navegação Tabs ======
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active','bg-indigo-600','text-white'));
+        btn.classList.add('active','bg-indigo-600','text-white');
+        const tab = btn.dataset.tab;
+        document.querySelectorAll('.tab-section').forEach(s => s.classList.add('hidden'));
+        document.getElementById('tab-'+tab).classList.remove('hidden');
+        if (tab === 'dashboard') refreshDashboard();
+        if (tab === 'vendas') renderVendas();
+      });
+    });
+
+    // ====== Produtos ======
+    const formProduto = document.getElementById('formProduto');
+    const produtoId = document.getElementById('produtoId');
+    const produtoNome = document.getElementById('produtoNome');
+    const produtoCategoria = document.getElementById('produtoCategoria');
+    const produtoPreco = document.getElementById('produtoPreco');
+    const produtoEstoque = document.getElementById('produtoEstoque');
+    const listaProdutos = document.getElementById('listaProdutos');
+    const buscaProduto = document.getElementById('buscaProduto');
+
+    formProduto.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const id = produtoId.value || crypto.randomUUID();
+      const obj = {
+        id,
+        nome: produtoNome.value.trim(),
+        categoria: produtoCategoria.value.trim(),
+        preco: Number(produtoPreco.value),
+        estoque: Number(produtoEstoque.value)
+      };
+      const i = state.produtos.findIndex(p => p.id === id);
+      if (i >= 0) state.produtos[i] = obj; else state.produtos.push(obj);
+      DB.saveProdutos(state.produtos);
+      formProduto.reset(); produtoId.value = '';
+      renderProdutos();
+      fillProdutosSelect();
+      alert('Produto salvo!');
+    });
+
+    function renderProdutos() {
+      const q = buscaProduto.value?.toLowerCase() || '';
+      const rows = state.produtos
+        .filter(p => p.nome.toLowerCase().includes(q) || p.categoria.toLowerCase().includes(q))
+        .map((p, idx) => `
+          <tr class="border-b last:border-0">
+            <td class="py-2 pr-2 text-slate-500">${idx+1}</td>
+            <td class="py-2 pr-2">${p.nome}</td>
+            <td class="py-2 pr-2">${p.categoria}</td>
+            <td class="py-2 pr-2">${BRL.format(p.preco)}</td>
+            <td class="py-2 pr-2 ${p.estoque<=5 ? 'text-red-600 font-medium' : ''}">${p.estoque}</td>
+            <td class="py-2 pr-2">
+              <button class="px-2 py-1 text-xs rounded-lg border border-slate-300 mr-2" onclick='editProduto("${p.id}")'>Editar</button>
+              <button class="px-2 py-1 text-xs rounded-lg border border-red-300 text-red-700" onclick='delProduto("${p.id}")'>Excluir</button>
+            </td>
+          </tr>`).join('');
+      listaProdutos.innerHTML = rows || `<tr><td colspan="6" class="py-4 text-center text-slate-500">Sem produtos</td></tr>`;
+    }
+
+    function editProduto(id){
+      const p = state.produtos.find(x=>x.id===id); if(!p) return;
+      produtoId.value = p.id; produtoNome.value = p.nome; produtoCategoria.value = p.categoria; produtoPreco.value = p.preco; produtoEstoque.value = p.estoque;
+      document.querySelector('[data-tab="produtos"]').click();
+    }
+    function delProduto(id){
+      if(!confirm('Excluir este produto?')) return;
+      state.produtos = state.produtos.filter(p=>p.id!==id);
+      DB.saveProdutos(state.produtos);
+      // remove vendas que referenciam
+      state.vendas = state.vendas.filter(v=>v.produtoId!==id);
+      DB.saveVendas(state.vendas);
+      renderProdutos(); fillProdutosSelect(); renderVendas(); refreshDashboard();
+    }
+
+    buscaProduto.addEventListener('input', renderProdutos);
+
+    document.getElementById('btnExportCSV').addEventListener('click', ()=>{
+      const headers = ['nome','categoria','preco','estoque'];
+      const lines = [headers.join(';')].concat(state.produtos.map(p=>[p.nome,p.categoria,p.preco,p.estoque].join(';')));
+      const blob = new Blob(["\uFEFF"+lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href=url; a.download='produtos.csv'; a.click(); URL.revokeObjectURL(url);
+    });
+
+    // ====== Vendas ======
+    const formVenda = document.getElementById('formVenda');
+    const vendaProduto = document.getElementById('vendaProduto');
+    const vendaPreco = document.getElementById('vendaPreco');
+    const vendaQtd = document.getElementById('vendaQtd');
+    const vendaData = document.getElementById('vendaData');
+    const listaVendas = document.getElementById('listaVendas');
+    const totalVendas = document.getElementById('totalVendas');
+
+    function fillProdutosSelect(){
+      vendaProduto.innerHTML = '<option value="" disabled selected>Selecione...</option>' + state.produtos.map(p=>`<option value="${p.id}" data-preco="${p.preco}">${p.nome} (${p.categoria})</option>`).join('');
+    }
+
+    vendaProduto.addEventListener('change', () => {
+      const opt = vendaProduto.selectedOptions[0];
+      if (opt) vendaPreco.value = Number(opt.dataset.preco).toFixed(2);
+    });
+    vendaData.value = today();
+
+    formVenda.addEventListener('submit', (e)=>{
+      e.preventDefault();
+      const idProd = vendaProduto.value; const prod = state.produtos.find(p=>p.id===idProd);
+      if(!prod) return alert('Selecione um produto válido');
+      const qtd = Number(vendaQtd.value);
+      if(qtd>prod.estoque) return alert('Quantidade excede o estoque!');
+      const preco = Number(vendaPreco.value);
+      const data = vendaData.value;
+      const venda = { id: crypto.randomUUID(), produtoId: prod.id, produto: prod.nome, categoria: prod.categoria, preco, qtd, data, total: Number((preco*qtd).toFixed(2)) };
+      state.vendas.unshift(venda);
+      DB.saveVendas(state.vendas);
+      // atualiza estoque
+      prod.estoque -= qtd; DB.saveProdutos(state.produtos);
+      renderVendas(); renderProdutos(); refreshDashboard(); aplicarRelatorio();
+      formVenda.reset(); vendaData.value = today(); fillProdutosSelect();
+      alert('Venda registrada!');
+    });
+
+    function renderVendas(){
+      const rows = state.vendas.map(v=>`
+        <tr class="border-b last:border-0">
+          <td class="py-2 pr-2">${v.data}</td>
+          <td class="py-2 pr-2">${v.produto}</td>
+          <td class="py-2 pr-2">${v.categoria}</td>
+          <td class="py-2 pr-2">${v.qtd}</td>
+          <td class="py-2 pr-2">${BRL.format(v.preco)}</td>
+          <td class="py-2 pr-2 font-medium">${BRL.format(v.total)}</td>
+          <td class="py-2 pr-2"><button class="px-2 py-1 text-xs rounded-lg border border-red-300 text-red-700" onclick='delVenda("${v.id}")'>Excluir</button></td>
+        </tr>`).join('');
+      listaVendas.innerHTML = rows || `<tr><td colspan="7" class="py-4 text-center text-slate-500">Sem vendas</td></tr>`;
+      const tot = state.vendas.reduce((s,v)=>s+v.total,0);
+      totalVendas.textContent = BRL.format(tot);
+    }
+
+    function delVenda(id){
+      const v = state.vendas.find(x=>x.id===id); if(!v) return;
+      if(!confirm('Excluir esta venda?')) return;
+      // devolve estoque
+      const p = state.produtos.find(x=>x.id===v.produtoId); if(p) { p.estoque += v.qtd; DB.saveProdutos(state.produtos); }
+      state.vendas = state.vendas.filter(x=>x.id!==id); DB.saveVendas(state.vendas);
+      renderVendas(); renderProdutos(); refreshDashboard(); aplicarRelatorio();
+    }
+
+    // ====== Relatórios ======
+    const formRelatorio = document.getElementById('formRelatorio');
+    const relDe = document.getElementById('relDe');
+    const relAte = document.getElementById('relAte');
+    const relCategoria = document.getElementById('relCategoria');
+    const relMinQtd = document.getElementById('relMinQtd');
+    const listaRelatorio = document.getElementById('listaRelatorio');
+    const totalRelatorio = document.getElementById('totalRelatorio');
+
+    formRelatorio.addEventListener('submit', (e)=>{ e.preventDefault(); aplicarRelatorio(); });
+    document.getElementById('btnFiltrarRel').addEventListener('click', (e)=>{ e.preventDefault(); aplicarRelatorio(); });
+
+    function aplicarRelatorio(){
+      const de = fmtDate(relDe.value); const ate = fmtDate(relAte.value);
+      const cat = relCategoria.value.trim().toLowerCase();
+      const minQ = Number(relMinQtd.value || 0);
+      const dados = state.vendas.filter(v=>{
+        const d = fmtDate(v.data);
+        const inRange = d>=de && d<=ate;
+        const byCat = !cat || v.categoria.toLowerCase().includes(cat);
+        const byQ = v.qtd >= minQ;
+        return inRange && byCat && byQ;
+      });
+      const rows = dados.map(v=>`
+        <tr class="border-b last:border-0">
+          <td class="py-2 pr-2">${v.data}</td>
+          <td class="py-2 pr-2">${v.produto}</td>
+          <td class="py-2 pr-2">${v.categoria}</td>
+          <td class="py-2 pr-2">${v.qtd}</td>
+          <td class="py-2 pr-2">${BRL.format(v.preco)}</td>
+          <td class="py-2 pr-2 font-medium">${BRL.format(v.total)}</td>
+        </tr>`).join('');
+      listaRelatorio.innerHTML = rows || `<tr><td colspan="6" class="py-4 text-center text-slate-500">Sem resultados</td></tr>`;
+      const tot = dados.reduce((s,v)=>s+v.total,0);
+      totalRelatorio.textContent = BRL.format(tot);
+      // guarda último resultado para PDF
+      window.__relatorioAtual = { de: relDe.value, ate: relAte.value, cat: relCategoria.value, minQ: minQ, dados, total: tot };
+    }
+
+    document.getElementById('btnPDF').addEventListener('click', ()=>{
+      const r = window.__relatorioAtual || { dados: [], total: 0 };
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      const titulo = 'Relatório de Vendas';
+      doc.setFontSize(16); doc.text(titulo, 14, 16);
+      doc.setFontSize(10);
+      doc.text(`Período: ${r.de} a ${r.ate}`, 14, 24);
+      if (r.cat) doc.text(`Filtro categoria: ${r.cat}`, 14, 30);
+      if (r.minQ) doc.text(`Mín. quantidade: ${r.minQ}`, 14, 36);
+      const corpo = r.dados.map(v=>[v.data, v.produto, v.categoria, v.qtd, BRL.format(v.preco), BRL.format(v.total)]);
+      doc.autoTable({
+        startY: 42,
+        head: [['Data','Produto','Categoria','Qtd','Preço','Total']],
+        body: corpo,
+        styles: { fontSize: 9 },
+        headStyles: { fillColor: [30,41,59] },
+        columnStyles: { 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } }
+      });
+      const y = doc.lastAutoTable.finalY + 8;
+      doc.setFontSize(12); doc.text(`TOTAL: ${BRL.format(r.total)}`, 14, y);
+      doc.save(`relatorio-vendas-${r.de}-a-${r.ate}.pdf`);
+    });
+
+    // ====== Dashboard ======
+    let chFat, chCat;
+    const kpiFatMes = document.getElementById('kpiFatMes');
+    const kpiItensMes = document.getElementById('kpiItensMes');
+    const kpiLowStock = document.getElementById('kpiLowStock');
+    const kpiTicket = document.getElementById('kpiTicket');
+    const dashRange = document.getElementById('dashRange');
+    const lowStockList = document.getElementById('lowStockList');
+
+    function refreshDashboard(){
+      const now = new Date();
+      const ym = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+      const vendasMes = state.vendas.filter(v=>v.data.startsWith(ym));
+      const fat = vendasMes.reduce((s,v)=>s+v.total,0);
+      const itens = vendasMes.reduce((s,v)=>s+v.qtd,0);
+      kpiFatMes.textContent = BRL.format(fat);
+      kpiItensMes.textContent = itens;
+      kpiTicket.textContent = BRL.format(vendasMes.length ? fat / vendasMes.length : 0);
+      const low = state.produtos.filter(p=>p.estoque<=5);
+      kpiLowStock.textContent = low.length;
+      lowStockList.innerHTML = low.map(p=>`<div class="px-3 py-2 rounded-xl border border-amber-300 bg-amber-50">${p.nome} • Estoque: <b>${p.estoque}</b></div>`).join('') || '<div class="text-slate-500">Tudo certo! Nenhum item crítico.</div>';
+
+      // 30 dias
+      const labels = []; const map = new Map();
+      for (let i=29;i>=0;i--){ const d = new Date(now - i*24*60*60*1000); const k = d.toISOString().slice(0,10); labels.push(k); map.set(k,0); }
+      state.vendas.forEach(v=>{ if(map.has(v.data)) map.set(v.data, map.get(v.data)+v.total); });
+      const dataFat = labels.map(k=>Number(map.get(k).toFixed(2)));
+      dashRange.textContent = `${labels[0]} a ${labels[labels.length-1]}`;
+
+      // chart faturamento
+      if (chFat) chFat.destroy();
+      chFat = new Chart(document.getElementById('chartFaturamento'), {
+        type: 'bar',
+        data: { labels, datasets: [{ label: 'Faturamento', data: dataFat }] },
+        options: { responsive: true, scales: { y: { ticks: { callback: v => BRL.format(v) } } }, plugins: { legend: { display: false } } }
+      });
+
+      // categorias
+      const porCat = {};
+      state.vendas.forEach(v=>{ porCat[v.categoria] = (porCat[v.categoria]||0) + v.total; });
+      const catLabels = Object.keys(porCat);
+      const catVals = Object.values(porCat);
+      if (chCat) chCat.destroy();
+      chCat = new Chart(document.getElementById('chartCategorias'), {
+        type: 'doughnut',
+        data: { labels: catLabels, datasets: [{ data: catVals }] },
+        options: { plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: ctx => `${ctx.label}: ${BRL.format(ctx.parsed)}` } } } }
+      });
+    }
+
+    // ====== Backup / Restore ======
+    document.getElementById('btnBackup').addEventListener('click', ()=> DB.backup());
+    document.getElementById('restoreInput').addEventListener('change', (e)=>{
+      const f = e.target.files[0]; if (f) DB.restore(f);
+    });
+
+    // ====== Start ======
+    window.addEventListener('load', init);
+  </script>
+</body>
+</html>
